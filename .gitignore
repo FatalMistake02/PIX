@@ -1,10 +1,13 @@
 __pycache__/
 *.pyc
 .vscode/
-
 test*.png
 test*.pix
 *.sif
+*.txt
+*.iss
+Output/
 
 !test.png
 !test.pix
+
