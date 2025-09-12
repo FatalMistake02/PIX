@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.vscode/
+
+test*.png
+test*.pix
+*.sif
+
+!test.png
+!test.pix
