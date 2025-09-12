@@ -17,6 +17,17 @@ Download the [latest release](https://github.com/FatalMistake02/.pix/releases/la
 ### 2. Conversion
 **To convert a image to a .pix file, open and image with the Convert to PIX "app".**
 
+1. Right click on an image file and go to open with.
+
+![1-1](https://github.com/FatalMistake02/.pix/blob/master/screenshots/1-1.png?raw=true)
+ 
+2. Click chose another app
+
+![1-2](https://github.com/FatalMistake02/.pix/blob/master/screenshots/1-2.png?raw=true)
+
+3. Select "Convert to PIX
+
+![1-3](https://github.com/FatalMistake02/.pix/blob/master/screenshots/1-3.png?raw=true)
 
 ---
 ### 3. Viewing
