@@ -8,7 +8,7 @@ A Lossless image file format designed to be as small as possible.
 This is just a side project so I won't be working in this much. If you have any suggestions please let me know.
 
 Not supported by any image editor directly.
-To edit see Editing in Intructions.
+To edit see [Editing](https://github.com/FatalMistake02/.pix/tree/master?tab=readme-ov-file#4-editing) in Intructions.
 
 ---
 ## Instructions
