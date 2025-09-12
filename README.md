@@ -39,7 +39,7 @@ Download the [latest release](https://github.com/FatalMistake02/.pix/releases/la
  
  2. Click "Convert to PNG"
 
-![2-1](https://github.com/FatalMistake02/.pix/blob/master/screenshots/2-1.png?raw=true)
+![1-4](https://github.com/FatalMistake02/.pix/blob/master/screenshots/1-4.png?raw=true)
 
 ---
 ### 3. Viewing
