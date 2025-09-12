@@ -65,4 +65,3 @@ echo.
 echo PIX file format installed successfully!
 echo.
 echo To uninstall, run uninstall_pix.bat as administrator.
-pause
