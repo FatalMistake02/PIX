@@ -17,7 +17,7 @@ To edit see [Editing](https://github.com/FatalMistake02/PIX/tree/master?tab=read
 - [Convert](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#2-conversion)
 - [View](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#3-viewing)
 - [Edit](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#4-editing)
-- [Advanced Convert](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#5-advanced-conversion)
+- [Advanced Convert](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#5-advanced-conversion-version-2)
 
 ### 1. Installation
 Download the [latest release](https://github.com/FatalMistake02/PIX/releases/latest) and run the installer.
