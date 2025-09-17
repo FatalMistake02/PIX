@@ -1,3 +1,3 @@
 @echo off
-python "%~dp0\edit-view_pix.py" "%~1"
+python "%~dp0\editor_pix.py" "%~1"
 pause
