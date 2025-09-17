@@ -84,11 +84,11 @@ Download the [latest release](https://github.com/FatalMistake02/PIX/releases/lat
 ### 5. Advanced Conversion (Version 2)
 
 1. Open the folder containing the PIX files and type:
-`python to_pix test.png test.pix --scm METHOD`
+`python to_pix.py test.png test.pix --scm METHOD`
 - Replace test.png with your image file.
 - Replace test.pix with the output name you want.
 - Replace METHOD with one of the available methods.
 - Run.
 
-2. To get a list of available methods, run: `python to_pix test.png test.pix --list`
+2. To get a list of available methods, run: `python to_pix.py test.png test.pix --list`
 ---
