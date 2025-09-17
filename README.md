@@ -1,6 +1,6 @@
 # PIX
 ---
-A Lossless image file format designed to be as small as possible.
+Pixels. A Lossless image file format designed to be as small as possible.
 
 >This project is licensed under the MIT License.
 
@@ -12,6 +12,13 @@ To edit see [Editing](https://github.com/FatalMistake02/PIX/tree/master?tab=read
 
 ---
 ## Instructions
+
+- [Install](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#1-installation)
+- [Convert](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#2-conversion)
+- [View](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#3-viewing)
+- [Edit](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#4-editing)
+- [Advanced Convert](https://github.com/FatalMistake02/PIX?tab=readme-ov-file#5-advanced-conversion)
+
 ### 1. Installation
 Download the [latest release](https://github.com/FatalMistake02/PIX/releases/latest) and run the installer.
 
@@ -67,10 +74,21 @@ Download the [latest release](https://github.com/FatalMistake02/PIX/releases/lat
 
 ![3-1](https://github.com/FatalMistake02/PIX/blob/master/screenshots/3-1.png?raw=true)
 
-3. This will open a terminal window and the photos app. Edit you image and when done go to the terminal and press enter.
+3. (version 1) This will open a terminal window and the photos app. Edit you image and when done go to the terminal and press enter.
 
 ![3-2](https://github.com/FatalMistake02/PIX/blob/master/screenshots/3-2.png?raw=true)
 
 
 ---
 
+### 5. Advanced Conversion (Version 2)
+
+1. Open the folder containing the PIX files and type:
+`python to_pix test.png test.pix --scm METHOD`
+- Replace test.png with your image file.
+- Replace test.pix with the output name you want.
+- Replace METHOD with one of the available methods.
+- Run.
+
+2. To get a list of available methods, run: `python to_pix test.png test.pix --list`
+---
