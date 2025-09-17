@@ -1,8 +1,108 @@
+# Viewer
+
 from PIL import Image
 import sys, zlib, os, time, tempfile, subprocess
 
+def run_length_decode(data, channels, pixel_count):
+    """Decode RLE data back to pixels"""
+    result = bytearray()
+    i = 0
+    pixels_decoded = 0
+    
+    while i < len(data) and pixels_decoded < pixel_count:
+        run_length = data[i]
+        i += 1
+        pixel_data = data[i:i+channels]
+        i += channels
+        
+        for _ in range(run_length):
+            result.extend(pixel_data)
+            pixels_decoded += 1
+            if pixels_decoded >= pixel_count:
+                break
+    
+    return result
+
+def png_filter_decode_fast(compressed_data, width, height, channels):
+    """Fast PNG-style filter decoder for viewer"""
+    filtered_data = zlib.decompress(compressed_data)
+    pixel_bytes = bytearray()
+    bytes_per_row = width * channels
+    filtered_pos = 0
+    
+    for row in range(height):
+        if filtered_pos >= len(filtered_data):
+            break
+            
+        filter_type = filtered_data[filtered_pos]
+        filtered_pos += 1
+        row_data = filtered_data[filtered_pos:filtered_pos + bytes_per_row]
+        filtered_pos += bytes_per_row
+        
+        if len(row_data) < bytes_per_row:
+            row_data = row_data + bytearray([0] * (bytes_per_row - len(row_data)))
+        
+        reconstructed_row = bytearray()
+        
+        if filter_type == 0:  # None
+            reconstructed_row = row_data
+        elif filter_type == 1:  # Sub
+            for i in range(len(row_data)):
+                if i < channels:
+                    reconstructed_row.append(row_data[i])
+                else:
+                    left = reconstructed_row[i - channels]
+                    reconstructed_row.append((row_data[i] + left) % 256)
+        elif filter_type == 2:  # Up
+            if row > 0:
+                prev_row_start = (row - 1) * bytes_per_row
+                prev_row = pixel_bytes[prev_row_start:prev_row_start + bytes_per_row]
+                for i in range(len(row_data)):
+                    up = prev_row[i] if i < len(prev_row) else 0
+                    reconstructed_row.append((row_data[i] + up) % 256)
+            else:
+                reconstructed_row = row_data
+        elif filter_type == 3:  # Average
+            prev_row = bytearray()
+            if row > 0:
+                prev_row_start = (row - 1) * bytes_per_row
+                prev_row = pixel_bytes[prev_row_start:prev_row_start + bytes_per_row]
+            for i in range(len(row_data)):
+                left = reconstructed_row[i - channels] if i >= channels else 0
+                up = prev_row[i] if i < len(prev_row) else 0
+                avg = (left + up) // 2
+                reconstructed_row.append((row_data[i] + avg) % 256)
+        elif filter_type == 4:  # Paeth
+            prev_row = bytearray()
+            if row > 0:
+                prev_row_start = (row - 1) * bytes_per_row
+                prev_row = pixel_bytes[prev_row_start:prev_row_start + bytes_per_row]
+            for i in range(len(row_data)):
+                left = reconstructed_row[i - channels] if i >= channels else 0
+                up = prev_row[i] if i < len(prev_row) else 0
+                up_left = prev_row[i - channels] if i >= channels and i < len(prev_row) else 0
+                
+                p = left + up - up_left
+                pa = abs(p - left)
+                pb = abs(p - up)
+                pc = abs(p - up_left)
+                
+                if pa <= pb and pa <= pc:
+                    pred = left
+                elif pb <= pc:
+                    pred = up
+                else:
+                    pred = up_left
+                    
+                reconstructed_row.append((row_data[i] + pred) % 256)
+        else:
+            reconstructed_row = row_data
+        
+        pixel_bytes.extend(reconstructed_row)
+    
+    return pixel_bytes
+
 def fast_load_pix(filename):
-    """Optimized pix loader for viewing - prioritizes speed over compatibility"""
     with open(filename, "rb") as f:
         header = f.read(7)
         if header[:2] != b"PX":
@@ -12,28 +112,37 @@ def fast_load_pix(filename):
         height = int.from_bytes(header[4:6], "little")
         flags = header[6]
         
-        compression = flags & 0x07
-        has_alpha = bool(flags & 0x08)
+        compression = flags & 0x0F
+        has_alpha = bool(flags & 0x10)
         pixel_count = width * height
+        channels = 4 if has_alpha else 3
 
         print(f"Loading {width}x{height} {'RGBA' if has_alpha else 'RGB'} image (compression={compression})")
 
         compressed_data = f.read()
         
-        if compression == 0:  
+        if compression == 0:  # Raw
             if has_alpha:
                 pixels = [tuple(compressed_data[i:i+4]) for i in range(0, len(compressed_data), 4)]
             else:
                 pixels = [tuple(compressed_data[i:i+3]) + (255,) for i in range(0, len(compressed_data), 3)]
 
-        elif compression in [2, 3]:  
+        elif compression == 1:  # RLE
+            decompressed = zlib.decompress(compressed_data)
+            raw_bytes = run_length_decode(decompressed, channels, pixel_count)
+            if has_alpha:
+                pixels = [tuple(raw_bytes[i:i+4]) for i in range(0, len(raw_bytes), 4)]
+            else:
+                pixels = [tuple(raw_bytes[i:i+3]) + (255,) for i in range(0, len(raw_bytes), 3)]
+
+        elif compression in [2, 3]:  # Zlib variants
             raw_bytes = zlib.decompress(compressed_data)
             if has_alpha:
                 pixels = [tuple(raw_bytes[i:i+4]) for i in range(0, len(raw_bytes), 4)]
             else:
                 pixels = [tuple(raw_bytes[i:i+3]) + (255,) for i in range(0, len(raw_bytes), 3)]
 
-        elif compression == 4:  
+        elif compression == 4:  # Simple delta prediction (unused in to_pix.py)
             delta_bytes = zlib.decompress(compressed_data)
             
             if has_alpha:
@@ -54,25 +163,9 @@ def fast_load_pix(filename):
                     prev[2] = (delta_bytes[i+2] + prev[2]) & 255
                     pixels.append(tuple(prev) + (255,))
 
-        elif compression == 1: 
-            decompressed = zlib.decompress(compressed_data)
-            pixels = []
-            i = 0
-            channels = 4 if has_alpha else 3
-            
-            while i < len(decompressed) and len(pixels) < pixel_count:
-                run_length = decompressed[i]
-                pixel_data = tuple(decompressed[i+1:i+1+channels])
-                if not has_alpha:
-                    pixel_data += (255,)
-                
-                pixels.extend([pixel_data] * run_length)
-                i += 1 + channels
-
-        elif compression == 5: 
+        elif compression == 5:  # Palette
             decompressed = zlib.decompress(compressed_data)
             palette_size = decompressed[0]
-            channels = 4 if has_alpha else 3
             
             palette = []
             for i in range(palette_size):
@@ -85,6 +178,40 @@ def fast_load_pix(filename):
             indices_start = 1 + palette_size * channels
             pixels = [palette[decompressed[i]] for i in range(indices_start, min(len(decompressed), indices_start + pixel_count))]
 
+        elif compression == 6:  # PNG-style filtering
+            raw_bytes = png_filter_decode_fast(compressed_data, width, height, channels)
+            
+            if has_alpha:
+                pixels = [tuple(raw_bytes[i:i+4]) for i in range(0, len(raw_bytes), 4)]
+            else:
+                pixels = [tuple(raw_bytes[i:i+3]) + (255,) for i in range(0, len(raw_bytes), 3)]
+
+        elif compression == 7:  # PNG filter all methods
+            raw_bytes = png_filter_decode_fast(compressed_data, width, height, channels)
+            
+            if has_alpha:
+                pixels = [tuple(raw_bytes[i:i+4]) for i in range(0, len(raw_bytes), 4)]
+            else:
+                pixels = [tuple(raw_bytes[i:i+3]) + (255,) for i in range(0, len(raw_bytes), 3)]
+
+        elif compression in [8, 9, 10]:  # RLE+PNG combinations and PNG+zlib combinations
+            # These are double-compressed, decompress outer layer first
+            if compression in [9, 10]:  # PNG+zlib combinations
+                compressed_data = zlib.decompress(compressed_data)
+            
+            if compression in [8]:  # RLE+PNG
+                # First decode as PNG filter
+                raw_bytes = png_filter_decode_fast(compressed_data, width, height, channels)
+                # Then decode RLE
+                raw_bytes = run_length_decode(raw_bytes, channels, pixel_count)
+            else:  # PNG combinations
+                raw_bytes = png_filter_decode_fast(compressed_data, width, height, channels)
+            
+            if has_alpha:
+                pixels = [tuple(raw_bytes[i:i+4]) for i in range(0, len(raw_bytes), 4)]
+            else:
+                pixels = [tuple(raw_bytes[i:i+3]) + (255,) for i in range(0, len(raw_bytes), 3)]
+
         else:
             raise ValueError(f"Unsupported compression type: {compression}")
 
@@ -95,7 +222,6 @@ def fast_load_pix(filename):
     return pixels, width, height
 
 def view_pix(filename, show_info=False):
-    """View pix file with optimized loading"""
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found")
         return
@@ -128,7 +254,6 @@ def view_pix(filename, show_info=False):
         print(f"Error loading {filename}: {e}")
 
 def batch_view_pix(filenames):
-    """View multiple pix files"""
     pix_files = []
     for filename in filenames:
         if filename.lower().endswith('.pix'):

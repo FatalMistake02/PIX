@@ -1,3 +1,5 @@
+# Convert from PIX to PNG
+
 from PIL import Image
 import sys, zlib
 
@@ -75,6 +77,92 @@ def predictive_decode(data, channels, width, height, method_hint="simple_delta")
     
     return result
 
+def png_filter_decode(compressed_data, width, height, channels):
+    filtered_data = zlib.decompress(compressed_data)
+    
+    pixel_bytes = bytearray()
+    bytes_per_row = width * channels
+    filtered_pos = 0
+    
+    for row in range(height):
+        if filtered_pos >= len(filtered_data):
+            break
+            
+        filter_type = filtered_data[filtered_pos]
+        filtered_pos += 1
+        
+        row_data = filtered_data[filtered_pos:filtered_pos + bytes_per_row]
+        filtered_pos += bytes_per_row
+        
+        if len(row_data) < bytes_per_row:
+            row_data = row_data + bytearray([0] * (bytes_per_row - len(row_data)))
+        
+        reconstructed_row = bytearray()
+        
+        if filter_type == 0:  
+            reconstructed_row = row_data
+            
+        elif filter_type == 1:  
+            for i in range(len(row_data)):
+                if i < channels:
+                    reconstructed_row.append(row_data[i])
+                else:
+                    left = reconstructed_row[i - channels]
+                    reconstructed_row.append((row_data[i] + left) % 256)
+                    
+        elif filter_type == 2:  
+            if row > 0:
+                prev_row_start = (row - 1) * bytes_per_row
+                prev_row = pixel_bytes[prev_row_start:prev_row_start + bytes_per_row]
+                for i in range(len(row_data)):
+                    up = prev_row[i] if i < len(prev_row) else 0
+                    reconstructed_row.append((row_data[i] + up) % 256)
+            else:
+                reconstructed_row = row_data
+                
+        elif filter_type == 3: 
+            prev_row = bytearray()
+            if row > 0:
+                prev_row_start = (row - 1) * bytes_per_row
+                prev_row = pixel_bytes[prev_row_start:prev_row_start + bytes_per_row]
+                
+            for i in range(len(row_data)):
+                left = reconstructed_row[i - channels] if i >= channels else 0
+                up = prev_row[i] if i < len(prev_row) else 0
+                avg = (left + up) // 2
+                reconstructed_row.append((row_data[i] + avg) % 256)
+                
+        elif filter_type == 4:  
+            prev_row = bytearray()
+            if row > 0:
+                prev_row_start = (row - 1) * bytes_per_row
+                prev_row = pixel_bytes[prev_row_start:prev_row_start + bytes_per_row]
+                
+            for i in range(len(row_data)):
+                left = reconstructed_row[i - channels] if i >= channels else 0
+                up = prev_row[i] if i < len(prev_row) else 0
+                up_left = prev_row[i - channels] if i >= channels and i < len(prev_row) else 0
+                
+                p = left + up - up_left
+                pa = abs(p - left)
+                pb = abs(p - up)
+                pc = abs(p - up_left)
+                
+                if pa <= pb and pa <= pc:
+                    pred = left
+                elif pb <= pc:
+                    pred = up
+                else:
+                    pred = up_left
+                    
+                reconstructed_row.append((row_data[i] + pred) % 256)
+        else:
+            reconstructed_row = row_data
+        
+        pixel_bytes.extend(reconstructed_row)
+    
+    return pixel_bytes
+
 def load_pix(filename):
     with open(filename, "rb") as f:
         magic = f.read(2)
@@ -85,8 +173,8 @@ def load_pix(filename):
         height = int.from_bytes(f.read(2), "little")
         flags = f.read(1)[0]
         
-        compression = flags & 0x07  
-        has_alpha = bool(flags & 0x08)  
+        compression = flags & 0x0F  
+        has_alpha = bool(flags & 0x10)  
         channels = 4 if has_alpha else 3
         pixel_count = width * height
 
@@ -95,7 +183,7 @@ def load_pix(filename):
         compressed_data = f.read()
         pixels = []
 
-        if compression == 0:
+        if compression == 0: 
             for i in range(0, len(compressed_data), channels):
                 if has_alpha:
                     r, g, b, a = compressed_data[i:i+4]
@@ -104,7 +192,7 @@ def load_pix(filename):
                     r, g, b = compressed_data[i:i+3]
                     pixels.append((r, g, b, 255))
 
-        elif compression == 1:
+        elif compression == 1:  
             decompressed = zlib.decompress(compressed_data)
             raw_bytes = run_length_decode(decompressed, channels, pixel_count)
             
@@ -116,7 +204,7 @@ def load_pix(filename):
                     r, g, b = raw_bytes[i:i+3]
                     pixels.append((r, g, b, 255))
 
-        elif compression == 2:
+        elif compression in [2, 3]:  
             raw_bytes = zlib.decompress(compressed_data)
             for i in range(0, len(raw_bytes), channels):
                 if has_alpha:
@@ -126,17 +214,7 @@ def load_pix(filename):
                     r, g, b = raw_bytes[i:i+3]
                     pixels.append((r, g, b, 255))
 
-        elif compression == 3:
-            raw_bytes = zlib.decompress(compressed_data)
-            for i in range(0, len(raw_bytes), channels):
-                if has_alpha:
-                    r, g, b, a = raw_bytes[i:i+4]
-                    pixels.append((r, g, b, a))
-                else:
-                    r, g, b = raw_bytes[i:i+3]
-                    pixels.append((r, g, b, 255))
-
-        elif compression == 4:
+        elif compression == 4:  
             decompressed = zlib.decompress(compressed_data)
             raw_bytes = predictive_decode(decompressed, channels, width, height, "simple_delta")
             
@@ -148,7 +226,7 @@ def load_pix(filename):
                     r, g, b = raw_bytes[i:i+3]
                     pixels.append((r, g, b, 255))
 
-        elif compression == 5:
+        elif compression == 5:  
             decompressed = zlib.decompress(compressed_data)
             palette_size = decompressed[0]
             palette_bytes_size = palette_size * channels
@@ -169,6 +247,62 @@ def load_pix(filename):
                     palette_index = decompressed[i]
                     if palette_index < len(palette):
                         pixels.append(palette[palette_index])
+
+        elif compression == 6:  
+            raw_bytes = png_filter_decode(compressed_data, width, height, channels)
+            for i in range(0, len(raw_bytes), channels):
+                if has_alpha:
+                    r, g, b, a = raw_bytes[i:i+4]
+                    pixels.append((r, g, b, a))
+                else:
+                    r, g, b = raw_bytes[i:i+3]
+                    pixels.append((r, g, b, 255))
+
+        elif compression == 7:  
+            raw_bytes = png_filter_decode(compressed_data, width, height, channels)
+            for i in range(0, len(raw_bytes), channels):
+                if has_alpha:
+                    r, g, b, a = raw_bytes[i:i+4]
+                    pixels.append((r, g, b, a))
+                else:
+                    r, g, b = raw_bytes[i:i+3]
+                    pixels.append((r, g, b, 255))
+
+        elif compression == 8:  
+            rle_data = png_filter_decode(compressed_data, width, height, channels)
+            raw_bytes = run_length_decode(rle_data, channels, pixel_count)
+            
+            for i in range(0, len(raw_bytes), channels):
+                if has_alpha:
+                    r, g, b, a = raw_bytes[i:i+4]
+                    pixels.append((r, g, b, a))
+                else:
+                    r, g, b = raw_bytes[i:i+3]
+                    pixels.append((r, g, b, 255))
+
+        elif compression == 9:   
+            png_compressed = zlib.decompress(compressed_data)
+            raw_bytes = png_filter_decode(png_compressed, width, height, channels)
+            
+            for i in range(0, len(raw_bytes), channels):
+                if has_alpha:
+                    r, g, b, a = raw_bytes[i:i+4]
+                    pixels.append((r, g, b, a))
+                else:
+                    r, g, b = raw_bytes[i:i+3]
+                    pixels.append((r, g, b, 255))
+
+        elif compression == 10:  
+            png_compressed = zlib.decompress(compressed_data)
+            raw_bytes = png_filter_decode(png_compressed, width, height, channels)
+            
+            for i in range(0, len(raw_bytes), channels):
+                if has_alpha:
+                    r, g, b, a = raw_bytes[i:i+4]
+                    pixels.append((r, g, b, a))
+                else:
+                    r, g, b = raw_bytes[i:i+3]
+                    pixels.append((r, g, b, 255))
 
         else:
             raise ValueError(f"Unsupported compression type: {compression}")

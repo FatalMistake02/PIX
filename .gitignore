@@ -8,6 +8,7 @@ test*.pix
 *.iss
 Output/
 test/
+logo2.png
 
 !test.png
 !test.pix
